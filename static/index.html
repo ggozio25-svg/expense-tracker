@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#4472C4">
+    <meta name="description" content="Gestione note spese e chilometriche">
+    
+    <title>Expense Tracker</title>
+    
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" href="icon-192.png">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Loader -->
+    <div id="loader" class="loader hidden">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <h1 class="nav-logo">💰 Expense Tracker</h1>
+            <div class="nav-menu">
+                <button class="nav-item active" data-page="dashboard">Dashboard</button>
+                <button class="nav-item" data-page="spese">Spese</button>
+                <button class="nav-item" data-page="km">Chilometriche</button>
+                <button class="nav-item" data-page="clienti">Clienti</button>
+                <button class="nav-item" data-page="veicoli">Veicoli</button>
+                <button class="nav-item" data-page="report">Report</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="container">
+        
+        <!-- DASHBOARD PAGE -->
+        <div id="page-dashboard" class="page active">
+            <h2>Dashboard</h2>
+            
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon">💶</div>
+                    <div class="stat-content">
+                        <p class="stat-label">Spese Mese Corrente</p>
+                        <p class="stat-value" id="stat-spese-mese">€ 0.00</p>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon">📋</div>
+                    <div class="stat-content">
+                        <p class="stat-label">Da Addebitare</p>
+                        <p class="stat-value" id="stat-addebitabili">€ 0.00</p>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon">🚗</div>
+                    <div class="stat-content">
+                        <p class="stat-label">Km Mese</p>
+                        <p class="stat-value" id="stat-km-mese">0 km</p>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon">🧾</div>
+                    <div class="stat-content">
+                        <p class="stat-label">Rimborsi Km</p>
+                        <p class="stat-value" id="stat-rimborsi-km">€ 0.00</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chart-container">
+                <h3>Spese per Categoria (Mese Corrente)</h3>
+                <div id="chart-categorie"></div>
+            </div>
+
+            <div class="recent-activity">
+                <h3>Ultime Spese</h3>
+                <div id="recent-spese"></div>
+            </div>
+        </div>
+
+        <!-- SPESE PAGE -->
+        <div id="page-spese" class="page">
+            <div class="page-header">
+                <h2>Gestione Spese</h2>
+                <button class="btn btn-primary" onclick="openSpesaModal()">
+                    ➕ Nuova Spesa
+                </button>
+            </div>
+
+            <!-- Filtri -->
+            <div class="filters-card">
+                <div class="filter-row">
+                    <div class="filter-group">
+                        <label>Da:</label>
+                        <input type="date" id="filter-spese-da">
+                    </div>
+                    <div class="filter-group">
+                        <label>A:</label>
+                        <input type="date" id="filter-spese-a">
+                    </div>
+                    <div class="filter-group">
+                        <label>Cliente:</label>
+                        <select id="filter-spese-cliente">
+                            <option value="">Tutti</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Categoria:</label>
+                        <select id="filter-spese-categoria">
+                            <option value="">Tutte</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>
+                            <input type="checkbox" id="filter-spese-addebitabili">
+                            Solo Addebitabili
+                        </label>
+                    </div>
+                    <button class="btn btn-secondary" onclick="applySpeseFiltri()">Filtra</button>
+                </div>
+            </div>
+
+            <!-- Tabella Spese -->
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Categoria</th>
+                            <th>Cliente</th>
+                            <th>Descrizione</th>
+                            <th>Importo</th>
+                            <th>Addebitabile</th>
+                            <th>Azioni</th>
+                        </tr>
+                    </thead>
+                    <tbody id="spese-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- CHILOMETRICHE PAGE -->
+        <div id="page-km" class="page">
+            <div class="page-header">
+                <h2>Gestione Chilometriche</h2>
+                <button class="btn btn-primary" onclick="openKmModal()">
+                    ➕ Nuovo Viaggio
+                </button>
+            </div>
+
+            <!-- Filtri -->
+            <div class="filters-card">
+                <div class="filter-row">
+                    <div class="filter-group">
+                        <label>Da:</label>
+                        <input type="date" id="filter-km-da">
+                    </div>
+                    <div class="filter-group">
+                        <label>A:</label>
+                        <input type="date" id="filter-km-a">
+                    </div>
+                    <div class="filter-group">
+                        <label>Veicolo:</label>
+                        <select id="filter-km-veicolo">
+                            <option value="">Tutti</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-secondary" onclick="applyKmFiltri()">Filtra</button>
+                </div>
+            </div>
+
+            <!-- Totali -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-content">
+                        <p class="stat-label">Totale Km</p>
+                        <p class="stat-value" id="totale-km-filtrato">0 km</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-content">
+                        <p class="stat-label">Totale Rimborsi</p>
+                        <p class="stat-value" id="totale-rimborsi-filtrato">€ 0.00</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabella -->
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Veicolo</th>
+                            <th>Partenza → Arrivo</th>
+                            <th>Cliente</th>
+                            <th>Km</th>
+                            <th>Tariffa</th>
+                            <th>Rimborso</th>
+                            <th>Azioni</th>
+                        </tr>
+                    </thead>
+                    <tbody id="km-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- CLIENTI PAGE -->
+        <div id="page-clienti" class="page">
+            <div class="page-header">
+                <h2>Gestione Clienti</h2>
+                <button class="btn btn-primary" onclick="openClienteModal()">
+                    ➕ Nuovo Cliente
+                </button>
+            </div>
+
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>Codice</th>
+                            <th>P.IVA</th>
+                            <th>Email</th>
+                            <th>Telefono</th>
+                            <th>Azioni</th>
+                        </tr>
+                    </thead>
+                    <tbody id="clienti-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- VEICOLI PAGE -->
+        <div id="page-veicoli" class="page">
+            <div class="page-header">
+                <h2>Gestione Veicoli</h2>
+                <button class="btn btn-primary" onclick="openVeicoloModal()">
+                    ➕ Nuovo Veicolo
+                </button>
+            </div>
+
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Targa</th>
+                            <th>Tipo</th>
+                            <th>Marca/Modello</th>
+                            <th>Tariffa ACI</th>
+                            <th>Tariffa Custom</th>
+                            <th>Azioni</th>
+                        </tr>
+                    </thead>
+                    <tbody id="veicoli-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- REPORT PAGE -->
+        <div id="page-report" class="page">
+            <h2>Report ed Export</h2>
+
+            <div class="report-section">
+                <h3>Export Spese</h3>
+                <div class="filter-row">
+                    <div class="filter-group">
+                        <label>Da:</label>
+                        <input type="date" id="export-spese-da">
+                    </div>
+                    <div class="filter-group">
+                        <label>A:</label>
+                        <input type="date" id="export-spese-a">
+                    </div>
+                    <div class="filter-group">
+                        <label>Cliente:</label>
+                        <select id="export-spese-cliente">
+                            <option value="">Tutti</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-success" onclick="exportSpese()">
+                        📥 Export Excel
+                    </button>
+                </div>
+            </div>
+
+            <div class="report-section">
+                <h3>Export Chilometriche</h3>
+                <div class="filter-row">
+                    <div class="filter-group">
+                        <label>Da:</label>
+                        <input type="date" id="export-km-da">
+                    </div>
+                    <div class="filter-group">
+                        <label>A:</label>
+                        <input type="date" id="export-km-a">
+                    </div>
+                    <button class="btn btn-success" onclick="exportKm()">
+                        📥 Export Excel
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- MODAL SPESA -->
+    <div id="modal-spesa" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-spesa-title">Nuova Spesa</h3>
+                <button class="close-btn" onclick="closeSpesaModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <form id="form-spesa">
+                    <input type="hidden" id="spesa-id">
+                    
+                    <div class="form-group">
+                        <label>Scansiona Ricevuta (opzionale)</label>
+                        <input type="file" id="spesa-foto" accept="image/*" capture="environment" onchange="uploadRicevuta(this)">
+                        <div id="ocr-preview" class="ocr-preview"></div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Data *</label>
+                            <input type="date" id="spesa-data" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Importo (€) *</label>
+                            <input type="number" id="spesa-importo" step="0.01" required>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Categoria *</label>
+                            <select id="spesa-categoria" required></select>
+                        </div>
+                        <div class="form-group">
+                            <label>Fornitore</label>
+                            <input type="text" id="spesa-fornitore">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Cliente</label>
+                            <select id="spesa-cliente">
+                                <option value="">-- Nessuno --</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Progetto</label>
+                            <select id="spesa-progetto">
+                                <option value="">-- Nessuno --</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Descrizione *</label>
+                        <textarea id="spesa-descrizione" rows="3" required></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="spesa-addebitabile">
+                            Addebitabile al cliente
+                        </label>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Note</label>
+                        <textarea id="spesa-note" rows="2"></textarea>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" onclick="closeSpesaModal()">Annulla</button>
+                        <button type="submit" class="btn btn-primary">Salva</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL CHILOMETRICA -->
+    <div id="modal-km" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-km-title">Nuovo Viaggio</h3>
+                <button class="close-btn" onclick="closeKmModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <form id="form-km">
+                    <input type="hidden" id="km-id">
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Data *</label>
+                            <input type="date" id="km-data" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Veicolo *</label>
+                            <select id="km-veicolo" required onchange="updateTariffaKm()"></select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Partenza *</label>
+                            <input type="text" id="km-partenza" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Arrivo *</label>
+                            <input type="text" id="km-arrivo" required>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Km Percorsi *</label>
+                            <input type="number" id="km-percorsi" step="0.1" required oninput="calcolaRimborso()">
+                        </div>
+                        <div class="form-group">
+                            <label>Tariffa €/km *</label>
+                            <input type="number" id="km-tariffa" step="0.001" required oninput="calcolaRimborso()">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Rimborso Calcolato</label>
+                        <input type="text" id="km-rimborso" readonly style="font-weight: bold; font-size: 1.2em;">
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Cliente</label>
+                            <select id="km-cliente">
+                                <option value="">-- Nessuno --</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Progetto</label>
+                            <select id="km-progetto">
+                                <option value="">-- Nessuno --</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="km-addebitabile">
+                            Addebitabile al cliente
+                        </label>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Descrizione</label>
+                        <textarea id="km-descrizione" rows="2"></textarea>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" onclick="closeKmModal()">Annulla</button>
+                        <button type="submit" class="btn btn-primary">Salva</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL CLIENTE -->
+    <div id="modal-cliente" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-cliente-title">Nuovo Cliente</h3>
+                <button class="close-btn" onclick="closeClienteModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <form id="form-cliente">
+                    <input type="hidden" id="cliente-id">
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Nome *</label>
+                            <input type="text" id="cliente-nome" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Codice</label>
+                            <input type="text" id="cliente-codice">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>P.IVA</label>
+                            <input type="text" id="cliente-piva" maxlength="11">
+                        </div>
+                        <div class="form-group">
+                            <label>Email</label>
+                            <input type="email" id="cliente-email">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Telefono</label>
+                        <input type="tel" id="cliente-telefono">
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" onclick="closeClienteModal()">Annulla</button>
+                        <button type="submit" class="btn btn-primary">Salva</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL VEICOLO -->
+    <div id="modal-veicolo" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-veicolo-title">Nuovo Veicolo</h3>
+                <button class="close-btn" onclick="closeVeicoloModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <form id="form-veicolo">
+                    <input type="hidden" id="veicolo-id">
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Targa *</label>
+                            <input type="text" id="veicolo-targa" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Tipo *</label>
+                            <select id="veicolo-tipo" required>
+                                <option value="Auto">Auto</option>
+                                <option value="Moto">Moto</option>
+                                <option value="Furgone">Furgone</option>
+                                <option value="Altro">Altro</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Marca</label>
+                            <input type="text" id="veicolo-marca">
+                        </div>
+                        <div class="form-group">
+                            <label>Modello</label>
+                            <input type="text" id="veicolo-modello">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Tariffa ACI (€/km)</label>
+                            <input type="number" id="veicolo-tariffa-aci" step="0.001" value="0.680">
+                        </div>
+                        <div class="form-group">
+                            <label>Tariffa Custom (€/km)</label>
+                            <input type="number" id="veicolo-tariffa-custom" step="0.001">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="veicolo-usa-custom">
+                            Usa Tariffa Custom
+                        </label>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" onclick="closeVeicoloModal()">Annulla</button>
+                        <button type="submit" class="btn btn-primary">Salva</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
