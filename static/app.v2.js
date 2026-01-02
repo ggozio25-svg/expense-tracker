@@ -899,10 +899,10 @@ async function exportSpese() {
         
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `spese_${new Date().toISOString().split('T')[0]}.xlsx`;
-        a.click();
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `spese_${new Date().toISOString().split('T')[0]}.xlsx`;
+        link.click();
         
         showSuccess('Export completato!');
     } catch (error) {
@@ -932,10 +932,10 @@ async function exportKm() {
         
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `chilometriche_${new Date().toISOString().split('T')[0]}.xlsx`;
-        a.click();
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `chilometriche_${new Date().toISOString().split('T')[0]}.xlsx`;
+        link.click();
         
         showSuccess('Export completato!');
     } catch (error) {
