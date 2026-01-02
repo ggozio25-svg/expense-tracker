@@ -1,7 +1,5 @@
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
-from supabase import create_client, Client
-from google.cloud import vision
 import os
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
@@ -10,7 +8,7 @@ from PIL import Image
 import base64
 from decimal import Decimal
 import json
-from google_helper import get_vision_credentials
+import requests
 
 # Carica variabili ambiente
 load_dotenv()
@@ -20,19 +18,23 @@ app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'dev-secret-key')
 app.config['MAX_CONTENT_LENGTH'] = int(os.getenv('MAX_UPLOAD_SIZE', 10485760))
 CORS(app)
 
-# Inizializza Supabase
-supabase: Client = create_client(
-    os.getenv('SUPABASE_URL'),
-    os.getenv('SUPABASE_KEY')
-)
+# Configurazione Supabase
+SUPABASE_URL = os.getenv('SUPABASE_URL')
+SUPABASE_KEY = os.getenv('SUPABASE_KEY')
+SUPABASE_SERVICE_KEY = os.getenv('SUPABASE_SERVICE_KEY')
 
-# Inizializza Google Vision con credenziali
-try:
-    credentials = get_vision_credentials()
-    vision_client = vision.ImageAnnotatorClient(credentials=credentials)
-except ValueError as e:
-    print(f"WARNING: Google Vision non configurato - OCR disabilitato: {e}")
-    vision_client = None
+# Headers per API Supabase
+def get_supabase_headers(use_service_key=False):
+    key = SUPABASE_SERVICE_KEY if use_service_key else SUPABASE_KEY
+    return {
+        'apikey': key,
+        'Authorization': f'Bearer {key}',
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation'
+    }
+
+# OCR disabilitato (Google Vision non incluso)
+vision_client = None
 
 # Helper function per conversione Decimal
 class DecimalEncoder(json.JSONEncoder):
@@ -48,465 +50,398 @@ app.json_encoder = DecimalEncoder
 @app.route('/api/categorie', methods=['GET'])
 def get_categorie():
     try:
-        response = supabase.table('categorie').select('*').eq('attiva', True).execute()
-        return jsonify({'success': True, 'data': response.data})
+        url = f"{SUPABASE_URL}/rest/v1/categorie"
+        params = {'attiva': 'eq.true'}
+        response = requests.get(url, headers=get_supabase_headers(), params=params)
+        response.raise_for_status()
+        return jsonify(response.json()), 200
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/categorie', methods=['POST'])
 def create_categoria():
     try:
-        data = request.json
-        response = supabase.table('categorie').insert(data).execute()
-        return jsonify({'success': True, 'data': response.data})
+        data = request.get_json()
+        url = f"{SUPABASE_URL}/rest/v1/categorie"
+        response = requests.post(url, headers=get_supabase_headers(True), json=data)
+        response.raise_for_status()
+        return jsonify(response.json()[0]), 201
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'error': str(e)}), 500
 
 # ============= API CLIENTI =============
 
 @app.route('/api/clienti', methods=['GET'])
 def get_clienti():
     try:
-        response = supabase.table('clienti').select('*').eq('attivo', True).order('nome').execute()
-        return jsonify({'success': True, 'data': response.data})
+        url = f"{SUPABASE_URL}/rest/v1/clienti"
+        params = {'attivo': 'eq.true', 'order': 'nome.asc'}
+        response = requests.get(url, headers=get_supabase_headers(), params=params)
+        response.raise_for_status()
+        return jsonify(response.json()), 200
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-@app.route('/api/clienti/<int:cliente_id>', methods=['GET'])
-def get_cliente(cliente_id):
-    try:
-        response = supabase.table('clienti').select('*').eq('id', cliente_id).single().execute()
-        return jsonify({'success': True, 'data': response.data})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/clienti', methods=['POST'])
 def create_cliente():
     try:
-        data = request.json
-        response = supabase.table('clienti').insert(data).execute()
-        return jsonify({'success': True, 'data': response.data})
+        data = request.get_json()
+        url = f"{SUPABASE_URL}/rest/v1/clienti"
+        response = requests.post(url, headers=get_supabase_headers(True), json=data)
+        response.raise_for_status()
+        return jsonify(response.json()[0]), 201
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'error': str(e)}), 500
 
-@app.route('/api/clienti/<int:cliente_id>', methods=['PUT'])
-def update_cliente(cliente_id):
+@app.route('/api/clienti/<int:id>', methods=['PUT'])
+def update_cliente(id):
     try:
-        data = request.json
-        response = supabase.table('clienti').update(data).eq('id', cliente_id).execute()
-        return jsonify({'success': True, 'data': response.data})
+        data = request.get_json()
+        url = f"{SUPABASE_URL}/rest/v1/clienti"
+        params = {'id': f'eq.{id}'}
+        response = requests.patch(url, headers=get_supabase_headers(True), params=params, json=data)
+        response.raise_for_status()
+        return jsonify(response.json()[0]), 200
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'error': str(e)}), 500
 
-@app.route('/api/clienti/<int:cliente_id>', methods=['DELETE'])
-def delete_cliente(cliente_id):
+@app.route('/api/clienti/<int:id>', methods=['DELETE'])
+def delete_cliente(id):
     try:
-        response = supabase.table('clienti').update({'attivo': False}).eq('id', cliente_id).execute()
-        return jsonify({'success': True})
+        url = f"{SUPABASE_URL}/rest/v1/clienti"
+        params = {'id': f'eq.{id}'}
+        data = {'attivo': False}
+        response = requests.patch(url, headers=get_supabase_headers(True), params=params, json=data)
+        response.raise_for_status()
+        return jsonify({'message': 'Cliente disattivato'}), 200
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'error': str(e)}), 500
 
 # ============= API PROGETTI =============
 
 @app.route('/api/progetti', methods=['GET'])
 def get_progetti():
     try:
+        url = f"{SUPABASE_URL}/rest/v1/progetti"
+        params = {'select': '*,clienti(nome)', 'order': 'data_inizio.desc'}
         cliente_id = request.args.get('cliente_id')
-        query = supabase.table('progetti').select('*, clienti(nome)')
-        
         if cliente_id:
-            query = query.eq('cliente_id', cliente_id)
-        
-        response = query.order('created_at', desc=True).execute()
-        return jsonify({'success': True, 'data': response.data})
+            params['cliente_id'] = f'eq.{cliente_id}'
+        response = requests.get(url, headers=get_supabase_headers(), params=params)
+        response.raise_for_status()
+        return jsonify(response.json()), 200
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/progetti', methods=['POST'])
 def create_progetto():
     try:
-        data = request.json
-        response = supabase.table('progetti').insert(data).execute()
-        return jsonify({'success': True, 'data': response.data})
+        data = request.get_json()
+        url = f"{SUPABASE_URL}/rest/v1/progetti"
+        response = requests.post(url, headers=get_supabase_headers(True), json=data)
+        response.raise_for_status()
+        return jsonify(response.json()[0]), 201
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'error': str(e)}), 500
 
-@app.route('/api/progetti/<int:progetto_id>', methods=['PUT'])
-def update_progetto(progetto_id):
+@app.route('/api/progetti/<int:id>', methods=['PUT'])
+def update_progetto(id):
     try:
-        data = request.json
-        response = supabase.table('progetti').update(data).eq('id', progetto_id).execute()
-        return jsonify({'success': True, 'data': response.data})
+        data = request.get_json()
+        url = f"{SUPABASE_URL}/rest/v1/progetti"
+        params = {'id': f'eq.{id}'}
+        response = requests.patch(url, headers=get_supabase_headers(True), params=params, json=data)
+        response.raise_for_status()
+        return jsonify(response.json()[0]), 200
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'error': str(e)}), 500
 
 # ============= API VEICOLI =============
 
 @app.route('/api/veicoli', methods=['GET'])
 def get_veicoli():
     try:
-        response = supabase.table('veicoli').select('*').eq('attivo', True).order('targa').execute()
-        return jsonify({'success': True, 'data': response.data})
+        url = f"{SUPABASE_URL}/rest/v1/veicoli"
+        params = {'attivo': 'eq.true', 'order': 'targa.asc'}
+        response = requests.get(url, headers=get_supabase_headers(), params=params)
+        response.raise_for_status()
+        return jsonify(response.json()), 200
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/veicoli', methods=['POST'])
 def create_veicolo():
     try:
-        data = request.json
-        response = supabase.table('veicoli').insert(data).execute()
-        return jsonify({'success': True, 'data': response.data})
+        data = request.get_json()
+        url = f"{SUPABASE_URL}/rest/v1/veicoli"
+        response = requests.post(url, headers=get_supabase_headers(True), json=data)
+        response.raise_for_status()
+        return jsonify(response.json()[0]), 201
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'error': str(e)}), 500
 
-@app.route('/api/veicoli/<int:veicolo_id>', methods=['PUT'])
-def update_veicolo(veicolo_id):
+@app.route('/api/veicoli/<int:id>', methods=['PUT'])
+def update_veicolo(id):
     try:
-        data = request.json
-        response = supabase.table('veicoli').update(data).eq('id', veicolo_id).execute()
-        return jsonify({'success': True, 'data': response.data})
+        data = request.get_json()
+        url = f"{SUPABASE_URL}/rest/v1/veicoli"
+        params = {'id': f'eq.{id}'}
+        response = requests.patch(url, headers=get_supabase_headers(True), params=params, json=data)
+        response.raise_for_status()
+        return jsonify(response.json()[0]), 200
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/veicoli/<int:id>', methods=['DELETE'])
+def delete_veicolo(id):
+    try:
+        url = f"{SUPABASE_URL}/rest/v1/veicoli"
+        params = {'id': f'eq.{id}'}
+        data = {'attivo': False}
+        response = requests.patch(url, headers=get_supabase_headers(True), params=params, json=data)
+        response.raise_for_status()
+        return jsonify({'message': 'Veicolo disattivato'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 # ============= API SPESE =============
 
 @app.route('/api/spese', methods=['GET'])
 def get_spese():
     try:
-        # Filtri
-        data_inizio = request.args.get('data_inizio')
-        data_fine = request.args.get('data_fine')
-        cliente_id = request.args.get('cliente_id')
-        progetto_id = request.args.get('progetto_id')
-        categoria_id = request.args.get('categoria_id')
-        addebitabile = request.args.get('addebitabile')
+        url = f"{SUPABASE_URL}/rest/v1/spese"
+        params = {
+            'select': '*,categorie(nome,colore),clienti(nome),progetti(nome)',
+            'order': 'data_spesa.desc'
+        }
         
-        query = supabase.table('spese').select('''
-            *,
-            categorie(nome, colore),
-            clienti(nome),
-            progetti(nome, codice)
-        ''')
-        
-        if data_inizio:
-            query = query.gte('data_spesa', data_inizio)
-        if data_fine:
-            query = query.lte('data_spesa', data_fine)
-        if cliente_id:
-            query = query.eq('cliente_id', cliente_id)
-        if progetto_id:
-            query = query.eq('progetto_id', progetto_id)
-        if categoria_id:
-            query = query.eq('categoria_id', categoria_id)
-        if addebitabile is not None:
-            query = query.eq('addebitabile', addebitabile == 'true')
-        
-        response = query.order('data_spesa', desc=True).execute()
-        return jsonify({'success': True, 'data': response.data})
+        # Filtri opzionali
+        if request.args.get('data_inizio'):
+            params['data_spesa'] = f'gte.{request.args.get("data_inizio")}'
+        if request.args.get('data_fine'):
+            params['data_spesa'] = f'lte.{request.args.get("data_fine")}'
+        if request.args.get('cliente_id'):
+            params['cliente_id'] = f'eq.{request.args.get("cliente_id")}'
+        if request.args.get('categoria_id'):
+            params['categoria_id'] = f'eq.{request.args.get("categoria_id")}'
+        if request.args.get('addebitabile'):
+            params['addebitabile'] = f'eq.{request.args.get("addebitabile")}'
+            
+        response = requests.get(url, headers=get_supabase_headers(), params=params)
+        response.raise_for_status()
+        return jsonify(response.json()), 200
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/spese', methods=['POST'])
 def create_spesa():
     try:
-        data = request.json
-        
-        # Validazione
-        if 'data_spesa' not in data or 'importo' not in data or 'descrizione' not in data:
-            return jsonify({'success': False, 'error': 'Campi obbligatori mancanti'}), 400
-        
-        response = supabase.table('spese').insert(data).execute()
-        return jsonify({'success': True, 'data': response.data})
+        data = request.get_json()
+        url = f"{SUPABASE_URL}/rest/v1/spese"
+        response = requests.post(url, headers=get_supabase_headers(True), json=data)
+        response.raise_for_status()
+        return jsonify(response.json()[0]), 201
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'error': str(e)}), 500
 
-@app.route('/api/spese/<int:spesa_id>', methods=['PUT'])
-def update_spesa(spesa_id):
+@app.route('/api/spese/<int:id>', methods=['PUT'])
+def update_spesa(id):
     try:
-        data = request.json
-        response = supabase.table('spese').update(data).eq('id', spesa_id).execute()
-        return jsonify({'success': True, 'data': response.data})
+        data = request.get_json()
+        url = f"{SUPABASE_URL}/rest/v1/spese"
+        params = {'id': f'eq.{id}'}
+        response = requests.patch(url, headers=get_supabase_headers(True), params=params, json=data)
+        response.raise_for_status()
+        return jsonify(response.json()[0]), 200
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'error': str(e)}), 500
 
-@app.route('/api/spese/<int:spesa_id>', methods=['DELETE'])
-def delete_spesa(spesa_id):
+@app.route('/api/spese/<int:id>', methods=['DELETE'])
+def delete_spesa(id):
     try:
-        response = supabase.table('spese').delete().eq('id', spesa_id).execute()
-        return jsonify({'success': True})
+        url = f"{SUPABASE_URL}/rest/v1/spese"
+        params = {'id': f'eq.{id}'}
+        response = requests.delete(url, headers=get_supabase_headers(True), params=params)
+        response.raise_for_status()
+        return jsonify({'message': 'Spesa eliminata'}), 200
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-# ============= OCR E UPLOAD IMMAGINI =============
-
-@app.route('/api/upload-ricevuta', methods=['POST'])
-def upload_ricevuta():
-    try:
-        if 'image' not in request.files:
-            return jsonify({'success': False, 'error': 'Nessuna immagine fornita'}), 400
-        
-        file = request.files['image']
-        if file.filename == '':
-            return jsonify({'success': False, 'error': 'Nome file vuoto'}), 400
-        
-        # Leggi l'immagine
-        image_bytes = file.read()
-        
-        # Upload su Supabase Storage
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f"ricevute/{timestamp}_{file.filename}"
-        
-        storage_response = supabase.storage.from_('expenses').upload(
-            filename,
-            image_bytes,
-            {'content-type': file.content_type}
-        )
-        
-        # Ottieni URL pubblico
-        image_url = supabase.storage.from_('expenses').get_public_url(filename)
-        
-        # Esegui OCR con Google Vision (se disponibile)
-        ocr_data = {}
-        if vision_client is not None:
-            image = vision.Image(content=image_bytes)
-            response = vision_client.text_detection(image=image)
-            texts = response.text_annotations
-            
-            if texts:
-                full_text = texts[0].description
-                ocr_data['full_text'] = full_text
-                
-                # Estrazione intelligente dati
-                ocr_data.update(extract_receipt_data(full_text))
-        else:
-            ocr_data['warning'] = 'OCR non disponibile - Google Vision non configurato'
-        
-        return jsonify({
-            'success': True,
-            'image_url': image_url,
-            'ocr_data': ocr_data
-        })
-    
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-def extract_receipt_data(text):
-    """Estrae dati strutturati dal testo OCR"""
-    import re
-    
-    data = {}
-    
-    # Cerca importo totale (pattern comuni)
-    importo_patterns = [
-        r'TOTALE[:\s]+€?\s*(\d+[,\.]\d{2})',
-        r'TOTAL[E]?[:\s]+€?\s*(\d+[,\.]\d{2})',
-        r'EUR[:\s]+(\d+[,\.]\d{2})',
-        r'€\s*(\d+[,\.]\d{2})'
-    ]
-    
-    for pattern in importo_patterns:
-        match = re.search(pattern, text, re.IGNORECASE)
-        if match:
-            importo_str = match.group(1).replace(',', '.')
-            data['importo'] = float(importo_str)
-            break
-    
-    # Cerca data
-    date_patterns = [
-        r'(\d{2}[/\-\.]\d{2}[/\-\.]\d{4})',
-        r'(\d{2}[/\-\.]\d{2}[/\-\.]\d{2})'
-    ]
-    
-    for pattern in date_patterns:
-        match = re.search(pattern, text)
-        if match:
-            data['data'] = match.group(1)
-            break
-    
-    # Cerca P.IVA
-    piva_match = re.search(r'P\.?\s*IVA[:\s]+(\d{11})', text, re.IGNORECASE)
-    if piva_match:
-        data['partita_iva'] = piva_match.group(1)
-    
-    return data
+        return jsonify({'error': str(e)}), 500
 
 # ============= API CHILOMETRICHE =============
 
 @app.route('/api/chilometriche', methods=['GET'])
 def get_chilometriche():
     try:
-        data_inizio = request.args.get('data_inizio')
-        data_fine = request.args.get('data_fine')
-        veicolo_id = request.args.get('veicolo_id')
-        cliente_id = request.args.get('cliente_id')
+        url = f"{SUPABASE_URL}/rest/v1/chilometriche"
+        params = {
+            'select': '*,veicoli(targa,marca,modello),clienti(nome),progetti(nome)',
+            'order': 'data_viaggio.desc'
+        }
         
-        query = supabase.table('chilometriche').select('''
-            *,
-            veicoli(targa, marca, modello),
-            clienti(nome),
-            progetti(nome, codice)
-        ''')
-        
-        if data_inizio:
-            query = query.gte('data_viaggio', data_inizio)
-        if data_fine:
-            query = query.lte('data_viaggio', data_fine)
-        if veicolo_id:
-            query = query.eq('veicolo_id', veicolo_id)
-        if cliente_id:
-            query = query.eq('cliente_id', cliente_id)
-        
-        response = query.order('data_viaggio', desc=True).execute()
-        return jsonify({'success': True, 'data': response.data})
+        # Filtri opzionali
+        if request.args.get('data_inizio'):
+            params['data_viaggio'] = f'gte.{request.args.get("data_inizio")}'
+        if request.args.get('data_fine'):
+            params['data_viaggio'] = f'lte.{request.args.get("data_fine")}'
+        if request.args.get('veicolo_id'):
+            params['veicolo_id'] = f'eq.{request.args.get("veicolo_id")}'
+        if request.args.get('cliente_id'):
+            params['cliente_id'] = f'eq.{request.args.get("cliente_id")}'
+            
+        response = requests.get(url, headers=get_supabase_headers(), params=params)
+        response.raise_for_status()
+        return jsonify(response.json()), 200
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/chilometriche', methods=['POST'])
 def create_chilometrica():
     try:
-        data = request.json
-        
-        # Calcola rimborso se non fornito
-        if 'rimborso_calcolato' not in data:
-            km = float(data['km_percorsi'])
-            tariffa = float(data['tariffa_applicata'])
-            data['rimborso_calcolato'] = round(km * tariffa, 2)
-        
-        response = supabase.table('chilometriche').insert(data).execute()
-        return jsonify({'success': True, 'data': response.data})
+        data = request.get_json()
+        url = f"{SUPABASE_URL}/rest/v1/chilometriche"
+        response = requests.post(url, headers=get_supabase_headers(True), json=data)
+        response.raise_for_status()
+        return jsonify(response.json()[0]), 201
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'error': str(e)}), 500
 
-@app.route('/api/chilometriche/<int:chilo_id>', methods=['PUT'])
-def update_chilometrica(chilo_id):
+@app.route('/api/chilometriche/<int:id>', methods=['PUT'])
+def update_chilometrica(id):
     try:
-        data = request.json
-        
-        # Ricalcola rimborso se modificati km o tariffa
-        if 'km_percorsi' in data or 'tariffa_applicata' in data:
-            current = supabase.table('chilometriche').select('*').eq('id', chilo_id).single().execute()
-            km = float(data.get('km_percorsi', current.data['km_percorsi']))
-            tariffa = float(data.get('tariffa_applicata', current.data['tariffa_applicata']))
-            data['rimborso_calcolato'] = round(km * tariffa, 2)
-        
-        response = supabase.table('chilometriche').update(data).eq('id', chilo_id).execute()
-        return jsonify({'success': True, 'data': response.data})
+        data = request.get_json()
+        url = f"{SUPABASE_URL}/rest/v1/chilometriche"
+        params = {'id': f'eq.{id}'}
+        response = requests.patch(url, headers=get_supabase_headers(True), params=params, json=data)
+        response.raise_for_status()
+        return jsonify(response.json()[0]), 200
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'error': str(e)}), 500
 
-@app.route('/api/chilometriche/<int:chilo_id>', methods=['DELETE'])
-def delete_chilometrica(chilo_id):
+@app.route('/api/chilometriche/<int:id>', methods=['DELETE'])
+def delete_chilometrica(id):
     try:
-        response = supabase.table('chilometriche').delete().eq('id', chilo_id).execute()
-        return jsonify({'success': True})
+        url = f"{SUPABASE_URL}/rest/v1/chilometriche"
+        params = {'id': f'eq.{id}'}
+        response = requests.delete(url, headers=get_supabase_headers(True), params=params)
+        response.raise_for_status()
+        return jsonify({'message': 'Chilometrica eliminata'}), 200
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'error': str(e)}), 500
 
-# ============= REPORT E STATISTICHE =============
+# ============= UPLOAD RICEVUTA CON OCR =============
+
+@app.route('/api/upload-ricevuta', methods=['POST'])
+def upload_ricevuta():
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'Nessun file caricato'}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': 'Nome file vuoto'}), 400
+        
+        # Leggi immagine
+        image_data = file.read()
+        
+        # Upload su Supabase Storage
+        filename = f"receipt_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{file.filename}"
+        
+        # Upload file a Supabase Storage usando API REST
+        storage_url = f"{SUPABASE_URL}/storage/v1/object/expenses/{filename}"
+        headers = {
+            'Authorization': f'Bearer {SUPABASE_SERVICE_KEY}',
+            'Content-Type': file.content_type or 'image/jpeg'
+        }
+        response = requests.post(storage_url, headers=headers, data=image_data)
+        
+        if response.status_code not in [200, 201]:
+            return jsonify({'error': 'Errore upload immagine'}), 500
+        
+        # URL pubblico dell'immagine
+        image_url = f"{SUPABASE_URL}/storage/v1/object/public/expenses/{filename}"
+        
+        # OCR disabilitato
+        ocr_data = {
+            'message': 'OCR non disponibile - inserire dati manualmente'
+        }
+        
+        return jsonify({
+            'image_url': image_url,
+            'ocr_data': ocr_data
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# ============= STATISTICHE =============
 
 @app.route('/api/stats/dashboard', methods=['GET'])
 def get_dashboard_stats():
     try:
-        # Periodo corrente (mese corrente)
         oggi = datetime.now()
-        inizio_mese = oggi.replace(day=1).strftime('%Y-%m-%d')
-        fine_mese = (oggi.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
-        fine_mese = fine_mese.strftime('%Y-%m-%d')
+        primo_giorno_mese = oggi.replace(day=1).strftime('%Y-%m-%d')
         
-        # Totale spese mese corrente
-        spese_mese = supabase.table('spese')\
-            .select('importo')\
-            .gte('data_spesa', inizio_mese)\
-            .lte('data_spesa', fine_mese)\
-            .execute()
+        stats = {}
         
-        totale_spese = sum(float(s['importo']) for s in spese_mese.data)
+        # Spese mese corrente
+        url = f"{SUPABASE_URL}/rest/v1/spese"
+        params = {'data_spesa': f'gte.{primo_giorno_mese}', 'select': 'importo'}
+        response = requests.get(url, headers=get_supabase_headers(), params=params)
+        spese = response.json()
+        stats['spese_mese'] = sum(float(s['importo']) for s in spese)
         
-        # Spese addebitabili non ancora addebitate
-        spese_addebitabili = supabase.table('spese')\
-            .select('importo')\
-            .eq('addebitabile', True)\
-            .eq('addebitata', False)\
-            .execute()
+        # Spese addebitabili
+        params = {'data_spesa': f'gte.{primo_giorno_mese}', 'addebitabile': 'eq.true', 'select': 'importo'}
+        response = requests.get(url, headers=get_supabase_headers(), params=params)
+        spese_add = response.json()
+        stats['spese_addebitabili'] = sum(float(s['importo']) for s in spese_add)
         
-        totale_addebitabili = sum(float(s['importo']) for s in spese_addebitabili.data)
+        # Km mese corrente
+        url = f"{SUPABASE_URL}/rest/v1/chilometriche"
+        params = {'data_viaggio': f'gte.{primo_giorno_mese}', 'select': 'km_percorsi,rimborso_calcolato'}
+        response = requests.get(url, headers=get_supabase_headers(), params=params)
+        km = response.json()
+        stats['km_mese'] = sum(float(k['km_percorsi']) for k in km)
+        stats['rimborsi_km'] = sum(float(k['rimborso_calcolato']) for k in km)
         
-        # Km totali mese
-        km_mese = supabase.table('chilometriche')\
-            .select('km_percorsi, rimborso_calcolato')\
-            .gte('data_viaggio', inizio_mese)\
-            .lte('data_viaggio', fine_mese)\
-            .execute()
-        
-        totale_km = sum(float(k['km_percorsi']) for k in km_mese.data)
-        totale_rimborsi_km = sum(float(k['rimborso_calcolato']) for k in km_mese.data)
+        # Ultime spese
+        url = f"{SUPABASE_URL}/rest/v1/spese"
+        params = {
+            'select': '*,categorie(nome,colore),clienti(nome)',
+            'order': 'data_spesa.desc',
+            'limit': '10'
+        }
+        response = requests.get(url, headers=get_supabase_headers(), params=params)
+        stats['ultime_spese'] = response.json()
         
         # Spese per categoria (mese corrente)
-        spese_categoria = supabase.table('spese')\
-            .select('categoria_id, importo, categorie(nome, colore)')\
-            .gte('data_spesa', inizio_mese)\
-            .lte('data_spesa', fine_mese)\
-            .execute()
+        url = f"{SUPABASE_URL}/rest/v1/spese"
+        params = {
+            'data_spesa': f'gte.{primo_giorno_mese}',
+            'select': 'importo,categorie(nome,colore)'
+        }
+        response = requests.get(url, headers=get_supabase_headers(), params=params)
+        spese_cat = response.json()
         
         categorie_totali = {}
-        for spesa in spese_categoria.data:
-            cat_nome = spesa['categorie']['nome'] if spesa.get('categorie') else 'Non categorizzata'
-            cat_colore = spesa['categorie']['colore'] if spesa.get('categorie') else '#6B7280'
-            
-            if cat_nome not in categorie_totali:
-                categorie_totali[cat_nome] = {'totale': 0, 'colore': cat_colore}
-            categorie_totali[cat_nome]['totale'] += float(spesa['importo'])
+        for spesa in spese_cat:
+            if spesa.get('categorie'):
+                cat_nome = spesa['categorie']['nome']
+                if cat_nome not in categorie_totali:
+                    categorie_totali[cat_nome] = {
+                        'nome': cat_nome,
+                        'colore': spesa['categorie']['colore'],
+                        'totale': 0
+                    }
+                categorie_totali[cat_nome]['totale'] += float(spesa['importo'])
         
-        return jsonify({
-            'success': True,
-            'data': {
-                'totale_spese_mese': totale_spese,
-                'totale_addebitabili': totale_addebitabili,
-                'totale_km_mese': totale_km,
-                'totale_rimborsi_km': totale_rimborsi_km,
-                'num_spese_mese': len(spese_mese.data),
-                'num_viaggi_mese': len(km_mese.data),
-                'spese_per_categoria': categorie_totali
-            }
-        })
+        stats['spese_per_categoria'] = list(categorie_totali.values())
+        
+        return jsonify(stats), 200
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'error': str(e)}), 500
 
-@app.route('/api/stats/mensili', methods=['GET'])
-def get_stats_mensili():
-    try:
-        anno = request.args.get('anno', datetime.now().year)
-        
-        stats = []
-        for mese in range(1, 13):
-            inizio = f"{anno}-{mese:02d}-01"
-            fine = (datetime(int(anno), mese, 28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
-            fine = fine.strftime('%Y-%m-%d')
-            
-            spese = supabase.table('spese')\
-                .select('importo')\
-                .gte('data_spesa', inizio)\
-                .lte('data_spesa', fine)\
-                .execute()
-            
-            km = supabase.table('chilometriche')\
-                .select('km_percorsi, rimborso_calcolato')\
-                .gte('data_viaggio', inizio)\
-                .lte('data_viaggio', fine)\
-                .execute()
-            
-            stats.append({
-                'mese': mese,
-                'totale_spese': sum(float(s['importo']) for s in spese.data),
-                'totale_km': sum(float(k['km_percorsi']) for k in km.data),
-                'totale_rimborsi': sum(float(k['rimborso_calcolato']) for k in km.data)
-            })
-        
-        return jsonify({'success': True, 'data': stats})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-# ============= EXPORT =============
+# ============= EXPORT EXCEL =============
 
 @app.route('/api/export/excel', methods=['POST'])
 def export_excel():
@@ -514,8 +449,8 @@ def export_excel():
         from openpyxl import Workbook
         from openpyxl.styles import Font, PatternFill, Alignment
         
-        data = request.json
-        tipo = data.get('tipo', 'spese')  # spese o chilometriche
+        data = request.get_json()
+        tipo = data.get('tipo', 'spese')
         filtri = data.get('filtri', {})
         
         wb = Workbook()
@@ -523,73 +458,84 @@ def export_excel():
         
         if tipo == 'spese':
             ws.title = "Spese"
-            
-            # Header
-            headers = ['Data', 'Categoria', 'Cliente', 'Progetto', 'Descrizione', 
-                      'Fornitore', 'Importo €', 'Addebitabile', 'Note']
+            headers = ['Data', 'Categoria', 'Cliente', 'Progetto', 'Descrizione', 'Importo', 'Fornitore', 'Addebitabile']
             ws.append(headers)
             
-            # Stile header
+            # Formattazione header
             for cell in ws[1]:
                 cell.font = Font(bold=True, color="FFFFFF")
                 cell.fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
                 cell.alignment = Alignment(horizontal="center")
             
-            # Dati
-            spese_response = supabase.table('spese').select('''
-                *,
-                categorie(nome),
-                clienti(nome),
-                progetti(nome)
-            ''').execute()
+            # Recupera spese
+            url = f"{SUPABASE_URL}/rest/v1/spese"
+            params = {
+                'select': '*,categorie(nome),clienti(nome),progetti(nome)',
+                'order': 'data_spesa.desc'
+            }
+            if filtri.get('data_inizio'):
+                params['data_spesa'] = f'gte.{filtri["data_inizio"]}'
+            if filtri.get('data_fine'):
+                params['data_spesa'] = f'lte.{filtri["data_fine"]}'
+            if filtri.get('cliente_id'):
+                params['cliente_id'] = f'eq.{filtri["cliente_id"]}'
+                
+            response = requests.get(url, headers=get_supabase_headers(), params=params)
+            spese = response.json()
             
-            for spesa in spese_response.data:
+            for spesa in spese:
                 ws.append([
                     spesa['data_spesa'],
                     spesa['categorie']['nome'] if spesa.get('categorie') else '',
                     spesa['clienti']['nome'] if spesa.get('clienti') else '',
                     spesa['progetti']['nome'] if spesa.get('progetti') else '',
                     spesa['descrizione'],
-                    spesa.get('fornitore', ''),
                     float(spesa['importo']),
-                    'Sì' if spesa['addebitabile'] else 'No',
-                    spesa.get('note', '')
+                    spesa.get('fornitore', ''),
+                    'Sì' if spesa['addebitabile'] else 'No'
                 ])
         
-        else:  # chilometriche
+        elif tipo == 'chilometriche':
             ws.title = "Chilometriche"
-            
-            headers = ['Data', 'Veicolo', 'Cliente', 'Progetto', 'Partenza', 
-                      'Arrivo', 'Km', 'Tariffa €/km', 'Rimborso €', 'Addebitabile']
+            headers = ['Data', 'Veicolo', 'Partenza', 'Arrivo', 'Km', 'Tariffa', 'Rimborso', 'Cliente', 'Addebitabile']
             ws.append(headers)
             
+            # Formattazione header
             for cell in ws[1]:
                 cell.font = Font(bold=True, color="FFFFFF")
-                cell.fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+                cell.fill = PatternFill(start_color="10B981", end_color="10B981", fill_type="solid")
                 cell.alignment = Alignment(horizontal="center")
             
-            km_response = supabase.table('chilometriche').select('''
-                *,
-                veicoli(targa),
-                clienti(nome),
-                progetti(nome)
-            ''').execute()
+            # Recupera chilometriche
+            url = f"{SUPABASE_URL}/rest/v1/chilometriche"
+            params = {
+                'select': '*,veicoli(targa),clienti(nome)',
+                'order': 'data_viaggio.desc'
+            }
+            if filtri.get('data_inizio'):
+                params['data_viaggio'] = f'gte.{filtri["data_inizio"]}'
+            if filtri.get('data_fine'):
+                params['data_viaggio'] = f'lte.{filtri["data_fine"]}'
+            if filtri.get('veicolo_id'):
+                params['veicolo_id'] = f'eq.{filtri["veicolo_id"]}'
+                
+            response = requests.get(url, headers=get_supabase_headers(), params=params)
+            chilometriche = response.json()
             
-            for km in km_response.data:
+            for km in chilometriche:
                 ws.append([
                     km['data_viaggio'],
                     km['veicoli']['targa'] if km.get('veicoli') else '',
-                    km['clienti']['nome'] if km.get('clienti') else '',
-                    km['progetti']['nome'] if km.get('progetti') else '',
                     km['partenza'],
                     km['arrivo'],
                     float(km['km_percorsi']),
                     float(km['tariffa_applicata']),
                     float(km['rimborso_calcolato']),
+                    km['clienti']['nome'] if km.get('clienti') else '',
                     'Sì' if km['addebitabile'] else 'No'
                 ])
         
-        # Salva in memoria
+        # Salva file
         output = io.BytesIO()
         wb.save(output)
         output.seek(0)
@@ -602,9 +548,9 @@ def export_excel():
             as_attachment=True,
             download_name=filename
         )
-    
+        
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'error': str(e)}), 500
 
 # ============= HEALTH CHECK =============
 
@@ -612,8 +558,11 @@ def export_excel():
 def health_check():
     return jsonify({
         'status': 'ok',
-        'timestamp': datetime.now().isoformat()
-    })
+        'timestamp': datetime.now().isoformat(),
+        'supabase_configured': bool(SUPABASE_URL and SUPABASE_KEY),
+        'vision_configured': vision_client is not None
+    }), 200
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    port = int(os.getenv('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=False)
