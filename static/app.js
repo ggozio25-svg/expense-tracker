@@ -123,11 +123,11 @@ async function apiCall(endpoint, method = 'GET', data = null) {
     const response = await fetch(`${API_URL}${endpoint}`, options);
     const result = await response.json();
     
-    if (!result.success) {
+    if (!response.ok) {
         throw new Error(result.error || 'Errore API');
     }
     
-    return result.data;
+    return result;
 }
 
 // ========== LOAD DATA ==========
@@ -415,40 +415,45 @@ function renderRecentSpese(spese) {
 // ========== DASHBOARD ==========
 
 function updateDashboardStats(stats) {
-    document.getElementById('stat-spese-mese').textContent = `€ ${stats.totale_spese_mese.toFixed(2)}`;
-    document.getElementById('stat-addebitabili').textContent = `€ ${stats.totale_addebitabili.toFixed(2)}`;
-    document.getElementById('stat-km-mese').textContent = `${stats.totale_km_mese.toFixed(0)} km`;
-    document.getElementById('stat-rimborsi-km').textContent = `€ ${stats.totale_rimborsi_km.toFixed(2)}`;
+    document.getElementById('stat-spese-mese').textContent = `€ ${(stats.spese_mese || 0).toFixed(2)}`;
+    document.getElementById('stat-addebitabili').textContent = `€ ${(stats.spese_addebitabili || 0).toFixed(2)}`;
+    document.getElementById('stat-km-mese').textContent = `${(stats.km_mese || 0).toFixed(0)} km`;
+    document.getElementById('stat-rimborsi-km').textContent = `€ ${(stats.rimborsi_km || 0).toFixed(2)}`;
     
-    renderCategorieChart(stats.spese_per_categoria);
+    renderCategorieChart(stats.spese_per_categoria || []);
 }
 
 function renderCategorieChart(categorie) {
     const container = document.getElementById('chart-categorie');
     container.innerHTML = '';
     
-    const totale = Object.values(categorie).reduce((sum, cat) => sum + cat.totale, 0);
+    if (!categorie || categorie.length === 0) {
+        container.innerHTML = '<p style="text-align:center; padding:2rem;">Nessuna spesa nel mese corrente</p>';
+        return;
+    }
+    
+    const totale = categorie.reduce((sum, cat) => sum + cat.totale, 0);
     
     if (totale === 0) {
         container.innerHTML = '<p style="text-align:center; padding:2rem;">Nessuna spesa nel mese corrente</p>';
         return;
     }
     
-    Object.entries(categorie).forEach(([nome, data]) => {
-        const percentuale = (data.totale / totale * 100).toFixed(1);
+    categorie.forEach(cat => {
+        const percentuale = (cat.totale / totale * 100).toFixed(1);
         
         const bar = document.createElement('div');
         bar.style.marginBottom = '1rem';
         bar.innerHTML = `
             <div style="display:flex; justify-content:space-between; margin-bottom:0.25rem;">
                 <span>
-                    <span class="category-color" style="background:${data.colore}"></span>
-                    ${nome}
+                    <span class="category-color" style="background:${cat.colore}"></span>
+                    ${cat.nome}
                 </span>
-                <span><strong>€ ${data.totale.toFixed(2)}</strong> (${percentuale}%)</span>
+                <span><strong>€ ${cat.totale.toFixed(2)}</strong> (${percentuale}%)</span>
             </div>
             <div style="background:#e9ecef; height:24px; border-radius:4px; overflow:hidden;">
-                <div style="background:${data.colore}; height:100%; width:${percentuale}%; transition:width 0.3s;"></div>
+                <div style="background:${cat.colore}; height:100%; width:${percentuale}%; transition:width 0.3s;"></div>
             </div>
         `;
         container.appendChild(bar);
