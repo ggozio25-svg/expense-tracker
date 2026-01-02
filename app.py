@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify, send_file, send_from_directory
 from flask_cors import CORS
 import os
 from dotenv import load_dotenv
@@ -13,7 +13,7 @@ import requests
 # Carica variabili ambiente
 load_dotenv()
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static')
 app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'dev-secret-key')
 app.config['MAX_CONTENT_LENGTH'] = int(os.getenv('MAX_UPLOAD_SIZE', 10485760))
 CORS(app)
@@ -44,6 +44,16 @@ class DecimalEncoder(json.JSONEncoder):
         return super(DecimalEncoder, self).default(obj)
 
 app.json_encoder = DecimalEncoder
+
+# ============= ROUTE FRONTEND =============
+
+@app.route('/')
+def index():
+    return send_from_directory('static', 'index.html')
+
+@app.route('/<path:filename>')
+def serve_static(filename):
+    return send_from_directory('static', filename)
 
 # ============= API CATEGORIE =============
 
@@ -220,10 +230,10 @@ def get_spese():
             params['data_spesa'] = f'gte.{request.args.get("data_inizio")}'
         if request.args.get('data_fine'):
             params['data_spesa'] = f'lte.{request.args.get("data_fine")}'
-        if request.args.get('cliente_id'):
-            params['cliente_id'] = f'eq.{request.args.get("cliente_id")}'
         if request.args.get('categoria_id'):
             params['categoria_id'] = f'eq.{request.args.get("categoria_id")}'
+        if request.args.get('cliente_id'):
+            params['cliente_id'] = f'eq.{request.args.get("cliente_id")}'
         if request.args.get('addebitabile'):
             params['addebitabile'] = f'eq.{request.args.get("addebitabile")}'
             
@@ -274,7 +284,7 @@ def get_chilometriche():
     try:
         url = f"{SUPABASE_URL}/rest/v1/chilometriche"
         params = {
-            'select': '*,veicoli(targa,marca,modello),clienti(nome),progetti(nome)',
+            'select': '*,veicoli(targa,modello),clienti(nome),progetti(nome)',
             'order': 'data_viaggio.desc'
         }
         
@@ -298,6 +308,12 @@ def get_chilometriche():
 def create_chilometrica():
     try:
         data = request.get_json()
+        
+        # Calcola rimborso automaticamente
+        km = float(data.get('km_percorsi', 0))
+        tariffa = float(data.get('tariffa_applicata', 0.19))
+        data['rimborso_calcolato'] = round(km * tariffa, 2)
+        
         url = f"{SUPABASE_URL}/rest/v1/chilometriche"
         response = requests.post(url, headers=get_supabase_headers(True), json=data)
         response.raise_for_status()
@@ -309,6 +325,13 @@ def create_chilometrica():
 def update_chilometrica(id):
     try:
         data = request.get_json()
+        
+        # Ricalcola rimborso se necessario
+        if 'km_percorsi' in data or 'tariffa_applicata' in data:
+            km = float(data.get('km_percorsi', 0))
+            tariffa = float(data.get('tariffa_applicata', 0.19))
+            data['rimborso_calcolato'] = round(km * tariffa, 2)
+        
         url = f"{SUPABASE_URL}/rest/v1/chilometriche"
         params = {'id': f'eq.{id}'}
         response = requests.patch(url, headers=get_supabase_headers(True), params=params, json=data)
@@ -328,10 +351,10 @@ def delete_chilometrica(id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# ============= UPLOAD RICEVUTA CON OCR =============
+# ============= UPLOAD IMMAGINE =============
 
-@app.route('/api/upload-ricevuta', methods=['POST'])
-def upload_ricevuta():
+@app.route('/api/upload', methods=['POST'])
+def upload_image():
     try:
         if 'file' not in request.files:
             return jsonify({'error': 'Nessun file caricato'}), 400
@@ -340,19 +363,28 @@ def upload_ricevuta():
         if file.filename == '':
             return jsonify({'error': 'Nome file vuoto'}), 400
         
-        # Leggi immagine
-        image_data = file.read()
+        # Comprimi immagine
+        img = Image.open(file)
+        img.thumbnail((1200, 1200))
         
-        # Upload su Supabase Storage
-        filename = f"receipt_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{file.filename}"
+        # Converti in JPEG
+        buffer = io.BytesIO()
+        if img.mode in ('RGBA', 'P'):
+            img = img.convert('RGB')
+        img.save(buffer, format='JPEG', quality=85)
+        buffer.seek(0)
         
-        # Upload file a Supabase Storage usando API REST
+        # Upload a Supabase Storage
+        filename = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{file.filename}"
+        filename = filename.replace(' ', '_')
+        
         storage_url = f"{SUPABASE_URL}/storage/v1/object/expenses/{filename}"
         headers = {
             'Authorization': f'Bearer {SUPABASE_SERVICE_KEY}',
-            'Content-Type': file.content_type or 'image/jpeg'
+            'Content-Type': 'image/jpeg'
         }
-        response = requests.post(storage_url, headers=headers, data=image_data)
+        
+        response = requests.post(storage_url, headers=headers, data=buffer.getvalue())
         
         if response.status_code not in [200, 201]:
             return jsonify({'error': 'Errore upload immagine'}), 500
