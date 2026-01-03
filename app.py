@@ -168,14 +168,18 @@ def update_progetto(id):
 
 # ============= API VEICOLI =============
 
-@app.route('/api/veicoli', methods=['GET'])
-def get_veicoli():
+@app.route('/api/veicoli', methods=['POST'])
+def create_veicolo():
     try:
+        data = request.get_json()
         url = f"{SUPABASE_URL}/rest/v1/veicoli"
-        params = {'attivo': 'eq.true', 'order': 'targa.asc'}
-        response = requests.get(url, headers=get_supabase_headers(), params=params)
-        response.raise_for_status()
-        return jsonify(response.json()), 200
+        response = requests.post(url, headers=get_supabase_headers(True), json=data)
+        
+        # Debug: mostra errore dettagliato
+        if not response.ok:
+            return jsonify({'error': f'{response.status_code} Client Error: {response.text}'}), 500
+            
+        return jsonify(response.json()[0]), 201
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
