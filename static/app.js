@@ -702,7 +702,8 @@ async function saveCliente(e) {
             codice: document.getElementById('cliente-codice').value || null,
             partita_iva: document.getElementById('cliente-piva').value || null,
             email: document.getElementById('cliente-email').value || null,
-            telefono: document.getElementById('cliente-telefono').value || null
+            telefono: document.getElementById('cliente-telefono').value || null,
+            attivo: true
         };
         
         if (id) {
@@ -782,7 +783,8 @@ async function saveVeicolo(e) {
             modello: document.getElementById('veicolo-modello').value || null,
             tariffa_km_aci: parseFloat(document.getElementById('veicolo-tariffa-aci').value),
             tariffa_km_custom: parseFloat(document.getElementById('veicolo-tariffa-custom').value) || null,
-            usa_tariffa_custom: document.getElementById('veicolo-usa-custom').checked
+            usa_tariffa_custom: document.getElementById('veicolo-usa-custom').checked,
+            attivo: true
         };
         
         if (id) {
