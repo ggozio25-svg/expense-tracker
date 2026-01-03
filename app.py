@@ -183,17 +183,6 @@ def create_veicolo():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/veicoli', methods=['POST'])
-def create_veicolo():
-    try:
-        data = request.get_json()
-        url = f"{SUPABASE_URL}/rest/v1/veicoli"
-        response = requests.post(url, headers=get_supabase_headers(True), json=data)
-        response.raise_for_status()
-        return jsonify(response.json()[0]), 201
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
 @app.route('/api/veicoli/<int:id>', methods=['PUT'])
 def update_veicolo(id):
     try:
