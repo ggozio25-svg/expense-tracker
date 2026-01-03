@@ -564,20 +564,26 @@
 
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Tariffa ACI (€/km)</label>
-                            <input type="number" id="veicolo-tariffa-aci" step="0.001" value="0.680">
+                            <label>Anno *</label>
+                            <input type="number" id="veicolo-anno" min="1900" max="2100" required>
                         </div>
+                        <div class="form-group">
+                            <label>Tariffa ACI (€/km) *</label>
+                            <input type="number" id="veicolo-tariffa-aci" step="0.001" value="0.680" required>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
                         <div class="form-group">
                             <label>Tariffa Custom (€/km)</label>
                             <input type="number" id="veicolo-tariffa-custom" step="0.001">
                         </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label>
-                            <input type="checkbox" id="veicolo-usa-custom">
-                            Usa Tariffa Custom
-                        </label>
+                        <div class="form-group" style="display: flex; align-items: center; padding-top: 1.5rem;">
+                            <label>
+                                <input type="checkbox" id="veicolo-usa-custom">
+                                Usa Tariffa Custom
+                            </label>
+                        </div>
                     </div>
 
                     <div class="modal-footer">
